@@ -1,0 +1,7 @@
+{
+  "config": {
+    "step": {"user": {"title": "VARTA Energiespeicher", "description": "Lokale VARTA-WebIF-Zugangsdaten", "data": {"host": "IP-Adresse / Host", "username": "Benutzername", "password": "Passwort"}}},
+    "error": {"cannot_connect": "Verbindung zum VARTA fehlgeschlagen", "invalid_auth": "Anmeldung fehlgeschlagen"},
+    "abort": {"already_configured": "Dieser VARTA ist bereits eingerichtet"}
+  }
+}
