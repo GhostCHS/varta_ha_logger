@@ -42,7 +42,6 @@ def _decode_value(raw: str):
 def _parse_js(text: str) -> dict:
     """Parse VARTA's simple JavaScript/parameter assignments."""
     out = {}
-    # Handles `foo = ...;` and `var foo = ...;`, including multiline arrays.
     pattern = r'(?ms)^\s*(?:var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?);\s*(?=\n|$)'
     for match in re.finditer(pattern, text or ""):
         out[match.group(1)] = _decode_value(match.group(2))
@@ -63,26 +62,46 @@ class VartaClient:
         self.password = password
         if not self.host.startswith(('http://', 'https://')):
             self.host = 'http://' + self.host
-        self._logged_in = False
+        self._session_id: str | None = None
 
     async def login(self):
+        """Login and explicitly retain the WebIF cookie.
+
+        Home Assistant's shared aiohttp cookie jar may reject cookies set by a
+        literal IP address. Therefore the VARTA session id is captured from the
+        response and sent explicitly on subsequent requests.
+        """
         async with self.session.post(
             f"{self.host}/cgi/login",
             params={"user": self.username, "password": self.password},
             timeout=ClientTimeout(total=8),
         ) as response:
             if response.status != 200:
+                self._session_id = None
                 raise VartaAuthError(f"VARTA login failed: HTTP {response.status}")
             await response.read()
-            self._logged_in = True
+            cookie = response.cookies.get('webif.session.id')
+            if cookie is None or not cookie.value:
+                self._session_id = None
+                raise VartaAuthError("VARTA login returned no session cookie")
+            self._session_id = cookie.value
+
+    def _headers(self) -> dict[str, str]:
+        if not self._session_id:
+            return {}
+        return {'Cookie': f'webif.session.id={self._session_id}'}
 
     async def _get(self, path: str, optional: bool = False) -> str | None:
-        if not self._logged_in:
+        if not self._session_id:
             await self.login()
         for attempt in range(2):
-            async with self.session.get(f"{self.host}{path}", timeout=ClientTimeout(total=8)) as response:
+            async with self.session.get(
+                f"{self.host}{path}",
+                headers=self._headers(),
+                timeout=ClientTimeout(total=8),
+            ) as response:
                 if response.status == 401 and attempt == 0:
-                    self._logged_in = False
+                    self._session_id = None
                     await self.login()
                     continue
                 if response.status != 200:
@@ -159,9 +178,9 @@ class VartaClient:
                 chargers.append(charger)
         result['chargers'] = chargers
 
-        # Convenience values based only on fields confirmed on the tested VARTA firmware.
         invs = sunspec.get('data', {}).get('Inverters') or []
         inv = invs[0] if invs else {}
+        cycles = energy.get('Chrg_LoadCycles')
         result['summary'] = {
             'device_serial': info.get('Device_Serial'),
             'ems_max_power': info.get('P_EMS_Max'),
@@ -171,7 +190,7 @@ class VartaClient:
             'kaco_active_power': inv.get('WAct'),
             'kaco_max_power': inv.get('WMax'),
             'kaco_power_limit': sunspec.get('data', {}).get('WMaxLimPct'),
-            'charge_cycles': (energy.get('Chrg_LoadCycles') or [None])[0] if isinstance(energy.get('Chrg_LoadCycles'), list) else energy.get('Chrg_LoadCycles'),
+            'charge_cycles': (cycles or [None])[0] if isinstance(cycles, list) else cycles,
             'active_errors': len(errors.get('ErrorList') or []),
         }
         return result
