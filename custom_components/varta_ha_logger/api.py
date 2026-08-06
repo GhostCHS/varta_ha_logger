@@ -40,11 +40,25 @@ def _decode_value(raw: str):
 
 
 def _parse_js(text: str) -> dict:
-    """Parse VARTA's simple JavaScript/parameter assignments."""
+    """Parse VARTA's simple JS assignments.
+
+    The WebIF sometimes returns several assignments on one physical line
+    (for example info.js). Splitting at semicolons is therefore more reliable
+    than requiring a newline after every assignment. Arrays spanning multiple
+    lines continue to work because the split is only performed at ';'.
+    """
     out = {}
-    pattern = r'(?ms)^\s*(?:var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?);\s*(?=\n|$)'
-    for match in re.finditer(pattern, text or ""):
-        out[match.group(1)] = _decode_value(match.group(2))
+    for statement in (text or "").split(';'):
+        statement = statement.strip()
+        if not statement:
+            continue
+        match = re.match(
+            r'^(?:var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$',
+            statement,
+            flags=re.S,
+        )
+        if match:
+            out[match.group(1)] = _decode_value(match.group(2))
     return out
 
 
@@ -65,12 +79,6 @@ class VartaClient:
         self._session_id: str | None = None
 
     async def login(self):
-        """Login and explicitly retain the WebIF cookie.
-
-        Home Assistant's shared aiohttp cookie jar may reject cookies set by a
-        literal IP address. Therefore the VARTA session id is captured from the
-        response and sent explicitly on subsequent requests.
-        """
         async with self.session.post(
             f"{self.host}/cgi/login",
             params={"user": self.username, "password": self.password},
@@ -135,15 +143,8 @@ class VartaClient:
         except Exception:
             sunspec = {}
 
-        result = {
-            'info': info,
-            'ems': ems,
-            'energy': energy,
-            'errors': errors,
-            'service': service,
-            'params': params,
-            'sunspec': sunspec,
-        }
+        result = {'info': info, 'ems': ems, 'energy': energy, 'errors': errors,
+                  'service': service, 'params': params, 'sunspec': sunspec}
 
         aliases = {
             'wr': ('WR_Conf', 'WR_Data'),
