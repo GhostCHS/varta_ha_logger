@@ -10,8 +10,10 @@ from .const import DOMAIN
 SENSORS = {
  ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
  ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','grid_power'):('Netzeinspeisung / Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','battery_power'):('Ladeleistung / Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','grid_export_power'):('Netzeinspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','grid_import_power'):('Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','battery_charge_power'):('Batterie Ladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','battery_discharge_power'):('Batterie Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
  ('summary','state_of_charge'):('Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
  ('summary','ems_max_power'):('Maximale EMS-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
  ('summary','ems_max_discharge_power'):('Maximale Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
@@ -51,15 +53,6 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
     @property
     def native_value(self):
         return _value_at(self.coordinator.data,self.path)
-
-    @property
-    def extra_state_attributes(self):
-        value=self.native_value
-        if self.path==('summary','grid_power') and isinstance(value,(int,float)):
-            return {'flussrichtung':'Netzeinspeisung' if value>=0 else 'Netzbezug'}
-        if self.path==('summary','battery_power') and isinstance(value,(int,float)):
-            return {'betriebsstatus':'Laden' if value>0 else 'Entladen' if value<0 else 'Standby'}
-        return None
 
     @property
     def device_info(self):

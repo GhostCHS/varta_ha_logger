@@ -144,13 +144,9 @@ class VartaClient:
         invs=sunspec.get('data',{}).get('Inverters') or []; inv=invs[0] if invs else {}; cycles=energy.get('Chrg_LoadCycles')
 
         # Reproduce the formulas used by the VARTA WebIF (U_chargers.js).
-        # Element SX grid power: round(sum(U_V_Lx * Iw_V_Lx) / 100).
         grid_power = _varta_three_phase_power(result['emeter'], 'U_V_', 'Iw_V_')
-
-        # Charge/discharge power: round(sum(U Insel Lx * I Insel Lx) / 100).
         charge_power = _varta_three_phase_power(result['wr'], 'U Insel ', 'I Insel ')
 
-        # Production: PMB + PV meter contribution for Element SX.
         pmb = _number(result['wr'].get('PMB'))
         pv_meter_power = _varta_three_phase_power(result['emeter'], 'U_V_', 'Iw_PV_')
         production_power = None
@@ -159,18 +155,26 @@ class VartaClient:
         elif _number(inv.get('WAct')) is not None:
             production_power = round(inv.get('WAct'))
 
-        # WebIF: calculateConsumptionPower(production, grid, charge)
-        #        = max(production - grid - charge, 0)
         consumption = None
         if all(isinstance(v,(int,float)) for v in (production_power, grid_power, charge_power)):
             consumption = max(production_power - grid_power - charge_power, 0)
 
-        # WebIF SOC weighting: battery type 5 => 3, type 7 => 6.
         soc = _weighted_soc(chargers)
+
+        # Split signed WebIF power flows into user-friendly, non-negative HA sensors.
+        # VARTA convention: positive grid = export, negative grid = import.
+        grid_export_power = max(grid_power, 0) if grid_power is not None else None
+        grid_import_power = max(-grid_power, 0) if grid_power is not None else None
+        # VARTA convention: positive battery = charging, negative battery = discharging.
+        battery_charge_power = max(charge_power, 0) if charge_power is not None else None
+        battery_discharge_power = max(-charge_power, 0) if charge_power is not None else None
 
         result['summary']={
             'device_serial':info.get('Device_Serial'),'ems_max_power':info.get('P_EMS_Max'),'ems_max_discharge_power':info.get('P_EMS_MaxDisc'),'charger_count':info.get('Anz_Charger'),
-            'production_power':production_power,'house_consumption':consumption,'grid_power':grid_power,'battery_power':charge_power,'state_of_charge':soc,'pv_meter_power':pv_meter_power,
+            'production_power':production_power,'house_consumption':consumption,
+            'grid_export_power':grid_export_power,'grid_import_power':grid_import_power,
+            'battery_charge_power':battery_charge_power,'battery_discharge_power':battery_discharge_power,
+            'state_of_charge':soc,'pv_meter_power':pv_meter_power,
             'kaco_connected':inv.get('connected'),'kaco_active_power':_number(inv.get('WAct')),'kaco_max_power':inv.get('WMax'),'kaco_power_limit':sunspec.get('data',{}).get('WMaxLimPct'),
             'charge_cycles':(cycles or [None])[0] if isinstance(cycles,list) else cycles,'active_errors':len(errors.get('ErrorList') or []),
         }
