@@ -8,32 +8,58 @@ from .const import DOMAIN
 
 SKIP_ROOTS={'params'}
 KNOWN={
- ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','grid_power'):('Netzbezug / Einspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','battery_power'):('Batterie Betrieb',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','state_of_charge'):('Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
- ('summary','ems_max_power'):('Max. EMS Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','ems_max_discharge_power'):('Max. EMS Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','charger_count'):('Anzahl Charger',None,None,None),
- ('summary','kaco_active_power'):('KACO AC-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','kaco_max_power'):('KACO Maximalleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','kaco_power_limit'):('KACO Leistungsbegrenzung',None,PERCENTAGE,SensorStateClass.MEASUREMENT),
- ('summary','charge_cycles'):('Ladezyklen',None,None,SensorStateClass.TOTAL_INCREASING),
+ ('summary','production_power'):('PV-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','house_consumption'):('Hausverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','grid_power'):('Netzleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','battery_power'):('Batterieleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','state_of_charge'):('Batterie-Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
+ ('summary','ems_max_power'):('Maximale EMS-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','ems_max_discharge_power'):('Maximale Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','charger_count'):('Anzahl Batterieladegeräte',None,None,None),
+ ('summary','kaco_active_power'):('Wechselrichter Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','kaco_max_power'):('Wechselrichter Nennleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','kaco_power_limit'):('Wechselrichter Leistungsbegrenzung',None,PERCENTAGE,SensorStateClass.MEASUREMENT),
+ ('summary','charge_cycles'):('Batterie-Ladezyklen',None,None,SensorStateClass.TOTAL_INCREASING),
  ('summary','active_errors'):('Aktive Fehler',None,None,SensorStateClass.MEASUREMENT),
- ('energy','EGrid_AC_DC'):('Energie Netz → Speicher',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
- ('energy','EGrid_DC_AC'):('Energie Speicher → Netz',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+ ('energy','EGrid_AC_DC'):('Energie aus dem Netz geladen',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+ ('energy','EGrid_DC_AC'):('Energie ins Netz abgegeben',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
  ('energy','EWr_AC_DC'):('Wechselrichter Ladeenergie',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+ ('info','Device_Serial'):('Seriennummer Energiespeicher',None,None,None),
+ ('info','Device_Description'):('Gerätebezeichnung',None,None,None),
+ ('info','Serial_EMeter'):('Seriennummer Energiezähler',None,None,None),
+ ('ems','Zeit'):('Letzte Aktualisierung VARTA',None,None,None),
 }
 for phase in ('L1','L2','L3'):
- KNOWN[('wr',f'U Verbund {phase}')]=(f'KACO Netzspannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
- KNOWN[('wr',f'I Verbund {phase}')]=(f'KACO Netzstrom {phase}',SensorDeviceClass.CURRENT,UnitOfElectricCurrent.AMPERE,SensorStateClass.MEASUREMENT)
- KNOWN[('wr',f'U Insel {phase}')]=(f'VARTA Inselspannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
- KNOWN[('wr',f'I Insel {phase}')]=(f'VARTA Inselstrom {phase}',SensorDeviceClass.CURRENT,UnitOfElectricCurrent.AMPERE,SensorStateClass.MEASUREMENT)
- KNOWN[('emeter',f'U_V_{phase}')]=(f'Energy Meter Spannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
+ KNOWN[('wr',f'U Verbund {phase}')]=(f'Wechselrichter Netzspannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
+ KNOWN[('wr',f'I Verbund {phase}')]=(f'Wechselrichter Netzstrom {phase}',SensorDeviceClass.CURRENT,UnitOfElectricCurrent.AMPERE,SensorStateClass.MEASUREMENT)
+ KNOWN[('wr',f'U Insel {phase}')]=(f'Notstrom Spannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
+ KNOWN[('wr',f'I Insel {phase}')]=(f'Notstrom Strom {phase}',SensorDeviceClass.CURRENT,UnitOfElectricCurrent.AMPERE,SensorStateClass.MEASUREMENT)
+ KNOWN[('emeter',f'U_V_{phase}')]=(f'Netzspannung {phase}',SensorDeviceClass.VOLTAGE,UnitOfElectricPotential.VOLT,SensorStateClass.MEASUREMENT)
+ KNOWN[('emeter',f'Iw_V_{phase}')]=(f'Netzleistung {phase}',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT)
+ KNOWN[('emeter',f'Iw_PV_{phase}')]=(f'PV-Leistung {phase}',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT)
+
+FRIENDLY_ROOTS={
+ 'info':'Gerät', 'ems':'Energiespeicher', 'energy':'Energie', 'errors':'Fehler',
+ 'service':'Service', 'sunspec':'Wechselrichter', 'wr':'Wechselrichter',
+ 'emeter':'Energiezähler', 'ens':'Netzschutz', 'na':'Netzschutz',
+ 'chargers':'Batterieladegerät', 'summary':'',
+}
+FRIENDLY_KEYS={
+ 'OnlineStatus':'Online-Status','System State':'Systemstatus','SK':'Schaltkontakt',
+ 'EMS Ctrl':'EMS-Steuerung','BetrFlags1':'Betriebsstatus 1','BetrFlags2':'Betriebsstatus 2','PMB':'Leistungsmanagement',
+ 'SOC_GS':'Ladezustand','BattData':'Batteriedaten','Type':'Typ','ModulData':'Moduldaten',
+ 'FilterZeit':'Filterzeit','ErrorList':'Fehlerliste','NA_ErrorList':'Netzschutz-Fehlerliste',
+}
 
 def _slug(parts):return re.sub(r'[^a-z0-9_]+','_','_'.join(str(x) for x in parts).lower()).strip('_')
-def _friendly(parts):return 'VARTA '+' / '.join(str(p+1) if isinstance(p,int) else str(p).replace('_',' ') for p in parts)
+def _friendly(parts):
+ root=FRIENDLY_ROOTS.get(parts[0],str(parts[0]).replace('_',' ').title()) if parts else ''
+ rest=[]
+ for p in parts[1:]:
+  if isinstance(p,int):rest.append(str(p+1))
+  else:rest.append(FRIENDLY_KEYS.get(str(p),str(p).replace('_',' ')))
+ text=' '.join(([root] if root else [])+rest).strip()
+ return text or 'VARTA Sensor'
 def _flatten(value,path=()):
  if isinstance(value,dict):
   for key,child in value.items():
