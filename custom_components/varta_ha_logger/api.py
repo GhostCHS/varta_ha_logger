@@ -1,30 +1,51 @@
-"""Local HTTP client for the VARTA WebIF.
-
-Read-only: this integration never writes parameters to the VARTA or KACO.
-"""
+"""Read-only local HTTP client for the VARTA WebIF."""
 from __future__ import annotations
+
 import ast
 import json
 import re
 from aiohttp import ClientSession, ClientTimeout
 
-class VartaApiError(Exception): pass
-class VartaAuthError(VartaApiError): pass
+
+class VartaApiError(Exception):
+    pass
+
+
+class VartaAuthError(VartaApiError):
+    pass
+
+
+def _decode_value(raw: str):
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+    try:
+        return ast.literal_eval(raw)
+    except Exception:
+        pass
+    if raw.lower() == "true":
+        return True
+    if raw.lower() == "false":
+        return False
+    try:
+        return int(raw, 0)
+    except Exception:
+        pass
+    try:
+        return float(raw)
+    except Exception:
+        return raw.strip('"')
 
 
 def _parse_js(text: str) -> dict:
-    """Parse the simple `Name = value;` JavaScript returned by VARTA."""
+    """Parse VARTA's simple JavaScript/parameter assignments."""
     out = {}
-    # Match assignments non-greedily up to a semicolon. Arrays may span lines.
-    for m in re.finditer(r'(?ms)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?);\s*(?=\n|$)', text):
-        key, raw = m.group(1), m.group(2).strip()
-        try:
-            out[key] = json.loads(raw)
-        except Exception:
-            try:
-                out[key] = ast.literal_eval(raw)
-            except Exception:
-                out[key] = raw.strip('"')
+    # Handles `foo = ...;` and `var foo = ...;`, including multiline arrays.
+    pattern = r'(?ms)^\s*(?:var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?);\s*(?=\n|$)'
+    for match in re.finditer(pattern, text or ""):
+        out[match.group(1)] = _decode_value(match.group(2))
     return out
 
 
@@ -49,30 +70,29 @@ class VartaClient:
             f"{self.host}/cgi/login",
             params={"user": self.username, "password": self.password},
             timeout=ClientTimeout(total=8),
-        ) as r:
-            if r.status != 200:
-                raise VartaAuthError(f"VARTA login failed: HTTP {r.status}")
-            await r.read()
+        ) as response:
+            if response.status != 200:
+                raise VartaAuthError(f"VARTA login failed: HTTP {response.status}")
+            await response.read()
             self._logged_in = True
 
     async def _get(self, path: str, optional: bool = False) -> str | None:
         if not self._logged_in:
             await self.login()
-        async with self.session.get(f"{self.host}{path}", timeout=ClientTimeout(total=8)) as r:
-            if r.status == 401:
-                self._logged_in = False
-                await self.login()
-                async with self.session.get(f"{self.host}{path}", timeout=ClientTimeout(total=8)) as r2:
-                    if r2.status != 200:
-                        if optional:
-                            return None
-                        raise VartaApiError(f"{path}: HTTP {r2.status}")
-                    return await r2.text()
-            if r.status != 200:
-                if optional:
-                    return None
-                raise VartaApiError(f"{path}: HTTP {r.status}")
-            return await r.text()
+        for attempt in range(2):
+            async with self.session.get(f"{self.host}{path}", timeout=ClientTimeout(total=8)) as response:
+                if response.status == 401 and attempt == 0:
+                    self._logged_in = False
+                    await self.login()
+                    continue
+                if response.status != 200:
+                    if optional:
+                        return None
+                    if response.status == 401:
+                        raise VartaAuthError("VARTA session/login rejected")
+                    raise VartaApiError(f"{path}: HTTP {response.status}")
+                return await response.text()
+        return None
 
     async def _optional_js(self, path: str) -> dict:
         try:
@@ -82,15 +102,12 @@ class VartaClient:
             return {}
 
     async def read_all(self) -> dict:
-        # Core pages known to be used by the VARTA WebIF.
         info = _parse_js(await self._get('/cgi/info.js'))
         conf = _parse_js(await self._get('/cgi/ems_conf.js'))
         ems = _parse_js(await self._get('/cgi/ems_data.js'))
-
-        # Additional read-only WebIF pages. Availability depends on firmware/user level.
         energy = await self._optional_js('/cgi/energy.js')
         errors = await self._optional_js('/cgi/error.js')
-        user_serv = await self._optional_js('/cgi/user_serv.js')
+        service = await self._optional_js('/cgi/user_serv.js')
         params = await self._optional_js('/cgi/param')
 
         smtxt = await self._get('/cgi/functionSM', optional=True)
@@ -100,45 +117,61 @@ class VartaClient:
             sunspec = {}
 
         result = {
-            'info': info, 'conf': conf, 'ems': ems, 'energy': energy,
-            'errors': errors, 'user_serv': user_serv, 'params': params,
+            'info': info,
+            'ems': ems,
+            'energy': energy,
+            'errors': errors,
+            'service': service,
+            'params': params,
             'sunspec': sunspec,
         }
 
-        # Top-level arrays: map every firmware-provided field name to its value.
         aliases = {
             'wr': ('WR_Conf', 'WR_Data'),
             'emeter': ('EMeter_Conf', 'EMETER_Data'),
             'ens': ('ENS_Conf', 'ENS_Data'),
             'na': ('NA_Conf', 'NA_Data'),
         }
-        for dest, (ckey, dkey) in aliases.items():
-            result[dest] = _map_array(conf.get(ckey), ems.get(dkey))
+        for dest, (conf_key, data_key) in aliases.items():
+            result[dest] = _map_array(conf.get(conf_key), ems.get(data_key))
 
-        # Charger_Data is an array of chargers. Each charger can contain BattData,
-        # which itself contains one or more battery modules.
         charger_names = conf.get('Charger_Conf') or []
         batt_names = conf.get('Batt_Conf') or []
         module_names = conf.get('Modul_Conf') or conf.get('Module_Conf') or []
         chargers = []
         raw_chargers = ems.get('Charger_Data') or []
         if isinstance(raw_chargers, list):
-            for ci, charger_raw in enumerate(raw_chargers):
-                charger = _map_array(charger_names, charger_raw)
-                charger['_index'] = ci
-                # BattData is normally the final nested array/object in Charger_Data.
+            for index, raw in enumerate(raw_chargers):
+                charger = _map_array(charger_names, raw)
+                charger['_index'] = index
                 batt_raw = charger.get('BattData')
                 if isinstance(batt_raw, list):
                     batt = _map_array(batt_names, batt_raw)
-                    module_raw = batt.get('ModulData')
                     modules = []
+                    module_raw = batt.get('ModulData')
                     if isinstance(module_raw, list):
-                        for mi, mod in enumerate(module_raw):
-                            mapped = _map_array(module_names, mod)
-                            mapped['_index'] = mi
+                        for module_index, module in enumerate(module_raw):
+                            mapped = _map_array(module_names, module)
+                            mapped['_index'] = module_index
                             modules.append(mapped)
                     batt['modules'] = modules
                     charger['battery'] = batt
                 chargers.append(charger)
         result['chargers'] = chargers
+
+        # Convenience values based only on fields confirmed on the tested VARTA firmware.
+        invs = sunspec.get('data', {}).get('Inverters') or []
+        inv = invs[0] if invs else {}
+        result['summary'] = {
+            'device_serial': info.get('Device_Serial'),
+            'ems_max_power': info.get('P_EMS_Max'),
+            'ems_max_discharge_power': info.get('P_EMS_MaxDisc'),
+            'charger_count': info.get('Anz_Charger'),
+            'kaco_connected': inv.get('connected'),
+            'kaco_active_power': inv.get('WAct'),
+            'kaco_max_power': inv.get('WMax'),
+            'kaco_power_limit': sunspec.get('data', {}).get('WMaxLimPct'),
+            'charge_cycles': (energy.get('Chrg_LoadCycles') or [None])[0] if isinstance(energy.get('Chrg_LoadCycles'), list) else energy.get('Chrg_LoadCycles'),
+            'active_errors': len(errors.get('ErrorList') or []),
+        }
         return result
