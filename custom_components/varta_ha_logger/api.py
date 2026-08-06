@@ -48,9 +48,38 @@ def _map_array(names, vals):
     return {str(name): vals[i] if i < len(vals) else None for i, name in enumerate(names)}
 
 
-def _sum_numeric(values):
-    nums = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
-    return sum(nums) if nums else None
+def _number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _varta_three_phase_power(data: dict, voltage_prefix: str, current_prefix: str):
+    """VARTA WebIF formula: sum(U_phase * I_phase) / 100."""
+    terms = []
+    for phase in ('L1', 'L2', 'L3'):
+        voltage = _number(data.get(f'{voltage_prefix}{phase}'))
+        current = _number(data.get(f'{current_prefix}{phase}'))
+        if voltage is None or current is None:
+            return None
+        terms.append(voltage * current)
+    return round(sum(terms) / 100)
+
+
+def _weighted_soc(chargers: list[dict]):
+    """Replicate ChargerUtils.calculateSoCFromData for known battery types."""
+    weighted = 0.0
+    weight_total = 0.0
+    for charger in chargers:
+        soc = _number(charger.get('SOC_GS'))
+        battery = charger.get('battery') or {}
+        if soc is None:
+            soc = _number(battery.get('SOC_RACK'))
+        if soc is None:
+            continue
+        battery_type = battery.get('Type')
+        weight = 3 if battery_type == 5 else 6 if battery_type == 7 else 1
+        weighted += soc * weight
+        weight_total += weight
+    return round(weighted / weight_total) if weight_total else None
 
 
 class VartaClient:
@@ -113,23 +142,36 @@ class VartaClient:
         result['chargers']=chargers
 
         invs=sunspec.get('data',{}).get('Inverters') or []; inv=invs[0] if invs else {}; cycles=energy.get('Chrg_LoadCycles')
-        pv_power=inv.get('WAct')
-        grid_raw=_sum_numeric([result['emeter'].get(f'Iw_V_{p}') for p in ('L1','L2','L3')])
-        # VARTA's Iw_V values use negative sign for grid import. Expose HA grid power positive=import, negative=export.
-        grid_power=-grid_raw if grid_raw is not None else None
-        pv_meter=_sum_numeric([result['emeter'].get(f'Iw_PV_{p}') for p in ('L1','L2','L3')])
-        # Charger SOC_GS is the same aggregate SOC shown by the VARTA WebIF. With multiple chargers use the first valid aggregate value.
-        soc=next((c.get('SOC_GS') for c in chargers if isinstance(c.get('SOC_GS'),(int,float))),None)
-        # The current firmware dump exposes no explicit battery power CGI field. Derive only when the system reports standby/zero currents;
-        # otherwise leave it unknown rather than publishing a fabricated value.
-        wr_currents=[result['wr'].get(f'I Verbund {p}') for p in ('L1','L2','L3')]
-        battery_power=0 if wr_currents and all(v==0 for v in wr_currents) else None
-        # House consumption follows the VARTA energy-flow balance when battery power is known.
-        consumption=(pv_power + grid_power + battery_power) if all(isinstance(v,(int,float)) for v in (pv_power,grid_power,battery_power)) else None
+
+        # Reproduce the formulas used by the VARTA WebIF (U_chargers.js).
+        # Element SX grid power: round(sum(U_V_Lx * Iw_V_Lx) / 100).
+        grid_power = _varta_three_phase_power(result['emeter'], 'U_V_', 'Iw_V_')
+
+        # Charge/discharge power: round(sum(U Insel Lx * I Insel Lx) / 100).
+        charge_power = _varta_three_phase_power(result['wr'], 'U Insel ', 'I Insel ')
+
+        # Production: PMB + PV meter contribution for Element SX.
+        pmb = _number(result['wr'].get('PMB'))
+        pv_meter_power = _varta_three_phase_power(result['emeter'], 'U_V_', 'Iw_PV_')
+        production_power = None
+        if pmb is not None:
+            production_power = round(pmb + (pv_meter_power or 0))
+        elif _number(inv.get('WAct')) is not None:
+            production_power = round(inv.get('WAct'))
+
+        # WebIF: calculateConsumptionPower(production, grid, charge)
+        #        = max(production - grid - charge, 0)
+        consumption = None
+        if all(isinstance(v,(int,float)) for v in (production_power, grid_power, charge_power)):
+            consumption = max(production_power - grid_power - charge_power, 0)
+
+        # WebIF SOC weighting: battery type 5 => 3, type 7 => 6.
+        soc = _weighted_soc(chargers)
+
         result['summary']={
             'device_serial':info.get('Device_Serial'),'ems_max_power':info.get('P_EMS_Max'),'ems_max_discharge_power':info.get('P_EMS_MaxDisc'),'charger_count':info.get('Anz_Charger'),
-            'production_power':pv_power,'house_consumption':consumption,'grid_power':grid_power,'battery_power':battery_power,'state_of_charge':soc,'pv_meter_power':pv_meter,
-            'kaco_connected':inv.get('connected'),'kaco_active_power':pv_power,'kaco_max_power':inv.get('WMax'),'kaco_power_limit':sunspec.get('data',{}).get('WMaxLimPct'),
+            'production_power':production_power,'house_consumption':consumption,'grid_power':grid_power,'battery_power':charge_power,'state_of_charge':soc,'pv_meter_power':pv_meter_power,
+            'kaco_connected':inv.get('connected'),'kaco_active_power':_number(inv.get('WAct')),'kaco_max_power':inv.get('WMax'),'kaco_power_limit':sunspec.get('data',{}).get('WMaxLimPct'),
             'charge_cycles':(cycles or [None])[0] if isinstance(cycles,list) else cycles,'active_errors':len(errors.get('ErrorList') or []),
         }
         return result
