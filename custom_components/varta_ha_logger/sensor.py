@@ -33,7 +33,6 @@ SENSORS = {
     # Status
     ('summary','active_errors'):('Aktive Fehler',None,None,SensorStateClass.MEASUREMENT),
     ('summary','charger_count'):('Anzahl Batterieladegeräte',None,None,None),
-    ('ems','Zeit'):('Letzte Aktualisierung VARTA',None,None,None),
 
     # Geräteinformationen
     ('info','Device_Serial'):('Seriennummer Energiespeicher',None,None,None),
