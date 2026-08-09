@@ -9,6 +9,7 @@ from .const import DOMAIN
 # available internally to the integration but no longer clutter the HA device.
 SENSORS = {
  ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+ ('summary','pv_energy_today'):('PV-Energie heute',SensorDeviceClass.ENERGY,UnitOfEnergy.KILO_WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
  ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
  ('summary','grid_export_power'):('Netzeinspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
  ('summary','grid_import_power'):('Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
@@ -49,6 +50,8 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
+        if path == ('summary', 'pv_energy_today'):
+            self._attr_icon = 'mdi:solar-power'
 
     @property
     def native_value(self):
