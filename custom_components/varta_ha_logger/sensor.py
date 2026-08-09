@@ -5,10 +5,37 @@ from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Only useful, interpreted values are exposed. Raw CGI arrays remain internal.
-# The order below is intentional: HA presents the entities in this order.
+# Home Assistant sorts entities alphabetically on the device page.
+# The zero-width prefix is intentionally invisible in the UI but provides
+# deterministic ordering. The visible sensor names remain unchanged.
+_ORDER = {
+    'Produktionsleistung': '01',
+    'Energieverbrauch': '02',
+    'Batterie Ladeleistung': '03',
+    'Batterie Entladeleistung': '04',
+    'Netzbezug': '05',
+    'Netzeinspeisung': '06',
+    'Ladezustand': '07',
+    'Wechselrichter Leistung': '10',
+    'Wechselrichter Nennleistung': '11',
+    'Wechselrichter Leistungsbegrenzung': '12',
+    'Maximale EMS-Leistung': '13',
+    'Maximale Entladeleistung': '14',
+    'Energie aus dem Netz geladen': '20',
+    'Energie ins Netz abgegeben': '21',
+    'Wechselrichter Ladeenergie': '22',
+    'Batterie-Ladezyklen': '23',
+    'Aktive Fehler': '30',
+    'Anzahl Batterieladegeräte': '31',
+    'Seriennummer Energiespeicher': '40',
+    'Seriennummer Energiezähler': '41',
+}
+
+# U+200B ZERO WIDTH SPACE is not visible in the UI, but participates in
+# Home Assistant's alphabetical entity sorting.
+_ZWSP = '\u200b'
+
 SENSORS = {
-    # Leistung
     ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','battery_charge_power'):('Batterie Ladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
@@ -16,25 +43,17 @@ SENSORS = {
     ('summary','grid_import_power'):('Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','grid_export_power'):('Netzeinspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','state_of_charge'):('Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
-
-    # Wechselrichter
     ('summary','kaco_active_power'):('Wechselrichter Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','kaco_max_power'):('Wechselrichter Nennleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','kaco_power_limit'):('Wechselrichter Leistungsbegrenzung',None,PERCENTAGE,SensorStateClass.MEASUREMENT),
     ('summary','ems_max_power'):('Maximale EMS-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
     ('summary','ems_max_discharge_power'):('Maximale Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
-
-    # Energie
     ('energy','EGrid_AC_DC'):('Energie aus dem Netz geladen',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
     ('energy','EGrid_DC_AC'):('Energie ins Netz abgegeben',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
     ('energy','EWr_AC_DC'):('Wechselrichter Ladeenergie',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
     ('summary','charge_cycles'):('Batterie-Ladezyklen',None,None,SensorStateClass.TOTAL_INCREASING),
-
-    # Status
     ('summary','active_errors'):('Aktive Fehler',None,None,SensorStateClass.MEASUREMENT),
     ('summary','charger_count'):('Anzahl Batterieladegeräte',None,None,None),
-
-    # Geräteinformationen
     ('info','Device_Serial'):('Seriennummer Energiespeicher',None,None,None),
     ('info','Serial_EMeter'):('Seriennummer Energiezähler',None,None,None),
 }
@@ -53,7 +72,12 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         super().__init__(coordinator)
         self.path=path
         self._attr_unique_id=f"varta_{entry_id}_{'_'.join(path)}"
-        self._attr_name=meta[0]
+        visible_name=meta[0]
+        # Prefix the entity's internal name with zero-width spaces. HA sorts
+        # these prefixes before normal letters, while the frontend renders
+        # them as invisible characters. This gives us a stable custom order.
+        order=_ORDER.get(visible_name,'99')
+        self._attr_name=(_ZWSP * int(order)) + visible_name
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
@@ -79,9 +103,5 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
 
 async def async_setup_entry(hass,entry,async_add_entities):
     coordinator=hass.data[DOMAIN][entry.entry_id]
-    entities=[]
-    for path,meta in SENSORS.items():
-        # Keep the entity available when an optional endpoint is temporarily empty;
-        # the coordinator retains the last valid dataset on transient misses.
-        entities.append(VartaSensor(coordinator,entry.entry_id,path,meta))
+    entities=[VartaSensor(coordinator,entry.entry_id,path,meta) for path,meta in SENSORS.items()]
     async_add_entities(entities)
