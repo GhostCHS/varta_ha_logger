@@ -1,0 +1,32 @@
+name: Build brand icon
+
+on:
+  push:
+    paths:
+      - 'custom_components/varta_ha_logger/brand/icon.svg'
+      - '.github/workflows/build-brand-icon.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Convert SVG to PNG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 256 -h 256 custom_components/varta_ha_logger/brand/icon.svg > custom_components/varta_ha_logger/brand/icon.png
+
+      - name: Commit PNG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/varta_ha_logger/brand/icon.png
+          git diff --cached --quiet || git commit -m "Build Home Assistant brand icon"
+          git push
