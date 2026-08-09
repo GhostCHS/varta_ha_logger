@@ -5,35 +5,38 @@ from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Home Assistant sorts entities alphabetically on the device page.
-# The zero-width prefix is intentionally invisible in the UI but provides
-# deterministic ordering. The visible sensor names remain unchanged.
+# Home Assistant's device page sorts entities alphabetically by their display
+# name. A normal zero-width prefix is ignored by the frontend's locale-aware
+# string comparison, so it cannot be used for ordering reliably.
+#
+# U+2800 BRAILLE PATTERN BLANK is visually empty but is retained by the
+# frontend's locale-aware comparison. Different prefix lengths therefore give
+# us a deterministic order without showing numbers or other visible characters.
 _ORDER = {
-    'Produktionsleistung': '01',
-    'Energieverbrauch': '02',
-    'Batterie Ladeleistung': '03',
-    'Batterie Entladeleistung': '04',
-    'Netzbezug': '05',
-    'Netzeinspeisung': '06',
-    'Ladezustand': '07',
-    'Wechselrichter Leistung': '10',
-    'Wechselrichter Nennleistung': '11',
-    'Wechselrichter Leistungsbegrenzung': '12',
-    'Maximale EMS-Leistung': '13',
-    'Maximale Entladeleistung': '14',
-    'Energie aus dem Netz geladen': '20',
-    'Energie ins Netz abgegeben': '21',
-    'Wechselrichter Ladeenergie': '22',
-    'Batterie-Ladezyklen': '23',
-    'Aktive Fehler': '30',
-    'Anzahl Batterieladegeräte': '31',
-    'Seriennummer Energiespeicher': '40',
-    'Seriennummer Energiezähler': '41',
+    'Produktionsleistung': 1,
+    'Energieverbrauch': 2,
+    'Batterie Ladeleistung': 3,
+    'Batterie Entladeleistung': 4,
+    'Netzbezug': 5,
+    'Netzeinspeisung': 6,
+    'Ladezustand': 7,
+    'Wechselrichter Leistung': 10,
+    'Wechselrichter Nennleistung': 11,
+    'Wechselrichter Leistungsbegrenzung': 12,
+    'Maximale EMS-Leistung': 13,
+    'Maximale Entladeleistung': 14,
+    'Energie aus dem Netz geladen': 20,
+    'Energie ins Netz abgegeben': 21,
+    'Wechselrichter Ladeenergie': 22,
+    'Batterie-Ladezyklen': 23,
+    'Aktive Fehler': 30,
+    'Anzahl Batterieladegeräte': 31,
+    'Seriennummer Energiespeicher': 40,
+    'Seriennummer Energiezähler': 41,
 }
 
-# U+200B ZERO WIDTH SPACE is not visible in the UI, but participates in
-# Home Assistant's alphabetical entity sorting.
-_ZWSP = '\u200b'
+# Visually blank Unicode character that participates in HA's sorting.
+_BLANK = '\u2800'
 
 SENSORS = {
     ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
@@ -73,11 +76,11 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         self.path=path
         self._attr_unique_id=f"varta_{entry_id}_{'_'.join(path)}"
         visible_name=meta[0]
-        # Prefix the entity's internal name with zero-width spaces. HA sorts
-        # these prefixes before normal letters, while the frontend renders
-        # them as invisible characters. This gives us a stable custom order.
-        order=_ORDER.get(visible_name,'99')
-        self._attr_name=(_ZWSP * int(order)) + visible_name
+        # HA sorts the device page by the display name. Prefix it with a
+        # visually blank character. More characters sort before fewer ones,
+        # so reverse the order number to get the requested ascending order.
+        order=_ORDER.get(visible_name,99)
+        self._attr_name=(_BLANK * (100 - order)) + visible_name
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
