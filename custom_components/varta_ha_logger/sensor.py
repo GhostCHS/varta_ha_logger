@@ -5,31 +5,39 @@ from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Deliberately expose only useful, interpreted values. Raw CGI arrays remain
-# available internally to the integration but no longer clutter the HA device.
+# Only useful, interpreted values are exposed. Raw CGI arrays remain internal.
+# The order below is intentional: HA presents the entities in this order.
 SENSORS = {
- ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','pv_energy_today'):('PV-Energie heute',SensorDeviceClass.ENERGY,UnitOfEnergy.KILO_WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
- ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','grid_export_power'):('Netzeinspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','grid_import_power'):('Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','battery_charge_power'):('Batterie Ladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','battery_discharge_power'):('Batterie Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','state_of_charge'):('Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
- ('summary','ems_max_power'):('Maximale EMS-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','ems_max_discharge_power'):('Maximale Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','charger_count'):('Anzahl Batterieladegeräte',None,None,None),
- ('summary','kaco_active_power'):('Wechselrichter Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','kaco_max_power'):('Wechselrichter Nennleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
- ('summary','kaco_power_limit'):('Wechselrichter Leistungsbegrenzung',None,PERCENTAGE,SensorStateClass.MEASUREMENT),
- ('summary','charge_cycles'):('Batterie-Ladezyklen',None,None,SensorStateClass.TOTAL_INCREASING),
- ('summary','active_errors'):('Aktive Fehler',None,None,SensorStateClass.MEASUREMENT),
- ('energy','EGrid_AC_DC'):('Energie aus dem Netz geladen',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
- ('energy','EGrid_DC_AC'):('Energie ins Netz abgegeben',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
- ('energy','EWr_AC_DC'):('Wechselrichter Ladeenergie',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
- ('info','Device_Serial'):('Seriennummer Energiespeicher',None,None,None),
- ('info','Serial_EMeter'):('Seriennummer Energiezähler',None,None,None),
- ('ems','Zeit'):('Letzte Aktualisierung VARTA',None,None,None),
+    # Leistung
+    ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','house_consumption'):('Energieverbrauch',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','battery_charge_power'):('Batterie Ladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','battery_discharge_power'):('Batterie Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','grid_import_power'):('Netzbezug',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','grid_export_power'):('Netzeinspeisung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','state_of_charge'):('Ladezustand',SensorDeviceClass.BATTERY,PERCENTAGE,SensorStateClass.MEASUREMENT),
+
+    # Wechselrichter
+    ('summary','kaco_active_power'):('Wechselrichter Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','kaco_max_power'):('Wechselrichter Nennleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','kaco_power_limit'):('Wechselrichter Leistungsbegrenzung',None,PERCENTAGE,SensorStateClass.MEASUREMENT),
+    ('summary','ems_max_power'):('Maximale EMS-Leistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+    ('summary','ems_max_discharge_power'):('Maximale Entladeleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
+
+    # Energie
+    ('energy','EGrid_AC_DC'):('Energie aus dem Netz geladen',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+    ('energy','EGrid_DC_AC'):('Energie ins Netz abgegeben',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+    ('energy','EWr_AC_DC'):('Wechselrichter Ladeenergie',SensorDeviceClass.ENERGY,UnitOfEnergy.WATT_HOUR,SensorStateClass.TOTAL_INCREASING),
+    ('summary','charge_cycles'):('Batterie-Ladezyklen',None,None,SensorStateClass.TOTAL_INCREASING),
+
+    # Status
+    ('summary','active_errors'):('Aktive Fehler',None,None,SensorStateClass.MEASUREMENT),
+    ('summary','charger_count'):('Anzahl Batterieladegeräte',None,None,None),
+    ('ems','Zeit'):('Letzte Aktualisierung VARTA',None,None,None),
+
+    # Geräteinformationen
+    ('info','Device_Serial'):('Seriennummer Energiespeicher',None,None,None),
+    ('info','Serial_EMeter'):('Seriennummer Energiezähler',None,None,None),
 }
 
 
@@ -50,8 +58,6 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
-        if path == ('summary', 'pv_energy_today'):
-            self._attr_icon = 'mdi:solar-power'
 
     @property
     def native_value(self):
@@ -76,7 +82,7 @@ async def async_setup_entry(hass,entry,async_add_entities):
     coordinator=hass.data[DOMAIN][entry.entry_id]
     entities=[]
     for path,meta in SENSORS.items():
-        # Add known sensors even when an optional endpoint is temporarily empty;
-        # coordinator retention will keep the last valid values on later misses.
+        # Keep the entity available when an optional endpoint is temporarily empty;
+        # the coordinator retains the last valid dataset on transient misses.
         entities.append(VartaSensor(coordinator,entry.entry_id,path,meta))
     async_add_entities(entities)
