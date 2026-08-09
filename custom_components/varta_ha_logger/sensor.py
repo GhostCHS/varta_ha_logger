@@ -5,13 +5,10 @@ from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Home Assistant's device page sorts entities alphabetically by their display
-# name. A normal zero-width prefix is ignored by the frontend's locale-aware
-# string comparison, so it cannot be used for ordering reliably.
-#
-# U+2800 BRAILLE PATTERN BLANK is visually empty but is retained by the
-# frontend's locale-aware comparison. Different prefix lengths therefore give
-# us a deterministic order without showing numbers or other visible characters.
+# Home Assistant sorts the device page by the entity's display name.
+# Multiple leading normal spaces are collapsed by the HTML frontend, but they
+# are retained in the entity name used for sorting. This gives us a visually
+# unobtrusive ordering prefix without numbers or symbols being shown.
 _ORDER = {
     'Produktionsleistung': 1,
     'Energieverbrauch': 2,
@@ -34,9 +31,6 @@ _ORDER = {
     'Seriennummer Energiespeicher': 40,
     'Seriennummer Energiezähler': 41,
 }
-
-# Visually blank Unicode character that participates in HA's sorting.
-_BLANK = '\u2800'
 
 SENSORS = {
     ('summary','production_power'):('Produktionsleistung',SensorDeviceClass.POWER,UnitOfPower.WATT,SensorStateClass.MEASUREMENT),
@@ -76,11 +70,8 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         self.path=path
         self._attr_unique_id=f"varta_{entry_id}_{'_'.join(path)}"
         visible_name=meta[0]
-        # HA sorts the device page by the display name. Prefix it with a
-        # visually blank character. More characters sort before fewer ones,
-        # so reverse the order number to get the requested ascending order.
         order=_ORDER.get(visible_name,99)
-        self._attr_name=(_BLANK * (100 - order)) + visible_name
+        self._attr_name=(' ' * order) + visible_name
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
