@@ -5,10 +5,10 @@ from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Home Assistant sorts the device page by the entity's display name.
-# Multiple leading normal spaces are collapsed by the HTML frontend, but they
-# are retained in the entity name used for sorting. This gives us a visually
-# unobtrusive ordering prefix without numbers or symbols being shown.
+# Home Assistant currently sorts the entities shown on the device page by
+# display name. Leading whitespace is invisible in the UI but participates in
+# the sort. More leading spaces sort before fewer leading spaces, so the order
+# numbers are deliberately reversed below.
 _ORDER = {
     'Produktionsleistung': 1,
     'Energieverbrauch': 2,
@@ -71,7 +71,8 @@ class VartaSensor(CoordinatorEntity,SensorEntity):
         self._attr_unique_id=f"varta_{entry_id}_{'_'.join(path)}"
         visible_name=meta[0]
         order=_ORDER.get(visible_name,99)
-        self._attr_name=(' ' * order) + visible_name
+        max_order=max(_ORDER.values(), default=1)
+        self._attr_name=(' ' * (max_order - order + 1)) + visible_name
         self._attr_device_class=meta[1]
         self._attr_native_unit_of_measurement=meta[2]
         self._attr_state_class=meta[3]
